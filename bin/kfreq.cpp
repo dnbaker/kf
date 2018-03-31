@@ -57,8 +57,9 @@ int main(int argc, char *argv[]) {
         std::vector<std::string> pathnames; for(const auto &path: paths) pathnames.emplace_back(canonicalize(path.data()) + ".k" + std::to_string(ks) + ".bin");
         #pragma omp parallel for
         for(unsigned i = 0; i < paths.size(); ++i) {
-            auto &kfc = kfcs[omp_get_thread_num()];
-            kfc.add(paths[i].data(), kseqs.data() + omp_get_thread_num());
+            const auto tid =  omp_get_thread_num();
+            auto &kfc = kfcs[tid];
+            kfc.add(paths[i].data(), kseqs.data() + tid);
             kfc.write(pathnames[i].data(), emit_binary);
             kfc.clear();
         }
