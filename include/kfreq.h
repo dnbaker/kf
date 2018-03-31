@@ -2,6 +2,7 @@
 #include "kmerutil.h"
 #include <vector>
 #include <cstring>
+#include <stdexcept>
 
 namespace kf {
 
@@ -55,7 +56,7 @@ class KFreqArray {
 #endif
         }
     };
-    const unsigned maxk_;
+    unsigned maxk_;
     std::vector<SubKFreq> freqs_;
 public:
     KFreqArray(unsigned k): maxk_(k) {
@@ -63,6 +64,22 @@ public:
             freqs_.emplace_back(freqs_.size() + 1);
         }
         //if(maxk_ != 4) throw std::runtime_error("I'm making it for only k == 4 for now because I'm lazy.");
+    }
+    KFreqArray(const char *path, bool read_binary) {
+        gzFile fp = gzopen(path, "rb");
+        if(!fp) throw std::runtime_error("Could not open file.");
+        if(read_binary) {
+            gzread(fp, &maxk_, sizeof(maxk_));
+            while(freqs_.size() < maxk_) {
+                freqs_.emplace_back(freqs_.size() + 1);
+            }
+            for(auto &sf: freqs_) {
+                gzread(fp, sf.data_.data(), sf.data_.size() * sizeof(SizeType));
+            }
+        } else {
+            throw std::runtime_error("NotImplementedError.");
+        }
+        gzclose(fp);
     }
     void clear_kmers() {
         for(auto &freq: freqs_) freq.clear_kmer();
