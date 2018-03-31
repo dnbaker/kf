@@ -109,12 +109,24 @@ public:
         for(auto &freq: freqs_)
             freq.clear();
     }
-    void write(const char *path) {
+    void write(const char *path, bool emit_binary=false) {
         gzFile fp = gzopen(path, "wb");
         if(fp == nullptr) throw std::runtime_error("Could not open file for output.");
-        gzwrite(fp, (void *)&maxk_, sizeof(maxk_));
-        for(const auto &freq: freqs_) {
-            freq.write(fp);
+        if(emit_binary) {
+            gzwrite(fp, (void *)&maxk_, sizeof(maxk_));
+            for(const auto &freq: freqs_) {
+                freq.write(fp);
+            }
+        }
+        else {
+            gzprintf(fp, "#Max k: %u\n", maxk_);
+            for(const auto &sf: freqs_) {
+                gzprintf(fp, "%u: [", sf.k_);
+                for(size_t i(0); i < sf.data_.size() - 1; ++i) {
+                    gzprintf(fp, "%zu|", size_t(sf.data_[i]));
+                }
+                gzprintf(fp, "%zu]\n", size_t(sf.data_.back()));
+            }
         }
         gzclose(fp);
     }
