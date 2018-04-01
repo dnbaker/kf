@@ -78,7 +78,7 @@ python: py/kf.cpython.so
 	python -c "import subprocess;import site; subprocess.check_call('cp "py/*`python3-config --extension-suffix`" %s' % site.getsitepackages()[0], shell=True)"
 
 %.cpython.so: %.cpp
-	$(CXX) $(UNDEFSTR) $(INCLUDES) -O3 -Wall $(FLAGS) $(INC) -shared -std=c++17 -fPIC `python3 -m pybind11 --includes` $< -o $*$(SUF) && \
+	$(CXX) $(UNDEFSTR) $(INCLUDES) -O3 -Wall $(FLAGS) $(INC) -shared -std=c++11 -fPIC `python3 -m pybind11 --includes` $< -o $*$(SUF) && \
     ln -fs $*$(SUF) $@
 
 tests: clean unit
