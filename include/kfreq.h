@@ -39,7 +39,7 @@ static const char KF_TEXT [] {'#', 'k', 'f', 't', 'x', 't', '\n'};
 
 
 // Counts short kmer occurrences using arrays. (Supported: up to 16)
-template<typename SizeType, typename=typename std::enable_if<std::is_integral<SizeType>::value>::type>
+template<typename SizeType, typename=typename std::enable_if<std::is_integral<SizeType>::value && std::is_unsigned<SizeType>::value>::type>
 class KFreqArray {
     struct SubKFreq {
         const unsigned k_; // Kmer size
@@ -180,6 +180,21 @@ public:
             }
         }
         gzclose(fp);
+    }
+    SizeType count(const std::string &str) {
+        const unsigned k = str.size();
+        if(k > maxk_) throw std::runtime_error("String is longer than maxk.");
+        auto it(str.cbegin());
+        SizeType v = cstr_lut[*it++];
+        do {
+            v <<= 2;
+            if((v |= cstr_lut[*it++]) == SizeType(-1))
+                throw std::runtime_error("Illegal character!");
+        } while(it < str.cend());
+        return count(k, v);
+    }
+    SizeType count(unsigned k, SizeType value) {
+        return freqs_[k - 1][value];
     }
 };
 
