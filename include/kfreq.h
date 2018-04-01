@@ -28,6 +28,15 @@ static inline void kseq_destroy_stack(kseq_t &ks) {
 
 namespace freq {
 
+enum Mode {
+    TEXT   = 0,
+    BINARY = 1,
+    DETECT = 2
+};
+
+static const char KF_BIN [] {'#', 'k', 'f', 'b', 'i', 'n', '\n'};
+static const char KF_TEXT [] {'#', 'k', 'f', 't', 'x', 't', '\n'};
+
 
 // Counts short kmer occurrences using arrays. (Supported: up to 16)
 template<typename SizeType, typename=typename std::enable_if<std::is_integral<SizeType>::value>::type>
@@ -65,19 +74,45 @@ public:
         }
         //if(maxk_ != 4) throw std::runtime_error("I'm making it for only k == 4 for now because I'm lazy.");
     }
-    KFreqArray(const char *path, bool read_binary) {
+    KFreqArray(const char *path) {
         gzFile fp = gzopen(path, "rb");
         if(!fp) throw std::runtime_error("Could not open file.");
+        char buf[sizeof(KF_BIN)];
+        gzread(fp, buf, sizeof(buf));
+        bool read_binary;
+        if(std::string(buf) == KF_BIN) read_binary == true;
+        else if(std::string(buf) == KF_TEXT) read_binary = false;
+        else {
+            buf[sizeof(buf) - 1] = '\0';
+            throw std::runtime_error(std::string("Unexpected magic string: ") + buf);
+        }
         if(read_binary) {
             gzread(fp, &maxk_, sizeof(maxk_));
-            while(freqs_.size() < maxk_) {
-                freqs_.emplace_back(freqs_.size() + 1);
-            }
-            for(auto &sf: freqs_) {
-                gzread(fp, sf.data_.data(), sf.data_.size() * sizeof(SizeType));
-            }
+            while(freqs_.size() < maxk_) freqs_.emplace_back(freqs_.size() + 1);
+            for(auto &sf: freqs_) gzread(fp, sf.data_.data(), sf.data_.size() * sizeof(SizeType));
         } else {
-            throw std::runtime_error("NotImplementedError.");
+            char *line, *p;
+            std::vector<char> linebuf(256);
+            if((line = gzgets(fp, linebuf.data(), linebuf.size())) == nullptr) throw std::runtime_error("Could not read from file.");
+            for(p = line; *p; ++p);
+            while(!std::isdigit(*p)) --p; // In case the newline is attached
+            while(std::isdigit(*p)) --p;
+            maxk_ = std::atoi(p + 1);
+            while(freqs_.size() < maxk_) freqs_.emplace_back(freqs_.size() + 1);
+            for(unsigned i(0); i < maxk_;++i) {
+                auto &freq = freqs_[i];
+                if((line = gzgets(fp, linebuf.data(), linebuf.size())) == nullptr) throw std::runtime_error("Could not read from file.");
+                if(!(p = std::strchr(line, '['))) goto fail;
+                unsigned j(0);
+                do {
+                    freq.data_[j++] = static_cast<SizeType>(std::strtoull(++p, nullptr, 10));
+                    while(std::isdigit(*p)) ++p;
+                } while(j < freq.data_.size());
+            }
+            if(false) {
+                fail:
+                throw std::runtime_error("Error in parsing.");
+            }
         }
         gzclose(fp);
     }
@@ -130,18 +165,17 @@ public:
         gzFile fp = gzopen(path, "wb");
         if(fp == nullptr) throw std::runtime_error("Could not open file for output.");
         if(emit_binary) {
+            gzwrite(fp, (void *)KF_BIN, sizeof(KF_BIN));
             gzwrite(fp, (void *)&maxk_, sizeof(maxk_));
             for(const auto &freq: freqs_) {
                 freq.write(fp);
             }
-        }
-        else {
+        } else {
+            gzwrite(fp, (void *)KF_TEXT, sizeof(KF_TEXT));
             gzprintf(fp, "#Max k: %u\n", maxk_);
             for(const auto &sf: freqs_) {
                 gzprintf(fp, "%u: [", sf.k_);
-                for(size_t i(0); i < sf.data_.size() - 1; ++i) {
-                    gzprintf(fp, "%zu|", size_t(sf.data_[i]));
-                }
+                for(size_t i(0); i < sf.data_.size() - 1; gzprintf(fp, "%zu|", size_t(sf.data_[i++])));
                 gzprintf(fp, "%zu]\n", size_t(sf.data_.back()));
             }
         }

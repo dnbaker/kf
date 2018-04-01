@@ -52,9 +52,11 @@ int main(int argc, char *argv[]) {
         }
         kseq_destroy_stack(seq);
     } else {
-        std::vector<kseq_t> kseqs; kseqs.reserve(nthreads); while(kseqs.size() < (unsigned)nthreads) kseqs.emplace_back(kseq_init_stack());
-        std::vector<freq::KFC> kfcs; kfcs.reserve(nthreads); while(kfcs.size() < (unsigned)nthreads) kfcs.emplace_back(ks);
-        std::vector<std::string> pathnames; for(const auto &path: paths) pathnames.emplace_back(canonicalize(path.data()) + ".k" + std::to_string(ks) + ".bin");
+        std::vector<freq::KFC> kfcs; kfcs.reserve(nthreads);
+        std::vector<kseq_t> kseqs; kseqs.reserve(nthreads);
+        while(kseqs.size() < (unsigned)nthreads) kseqs.emplace_back(kseq_init_stack()), kfcs.emplace_back(ks);
+        std::vector<std::string> pathnames;
+        for(const auto &path: paths) pathnames.emplace_back(canonicalize(path.data()) + ".k" + std::to_string(ks) + ".bin");
         #pragma omp parallel for
         for(unsigned i = 0; i < paths.size(); ++i) {
             const auto tid =  omp_get_thread_num();
