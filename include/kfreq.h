@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstring>
 #include <stdexcept>
+#include <limits>
 
 namespace kf {
 
@@ -37,6 +38,18 @@ enum Mode {
 static const char KF_BIN [] {'#', 'k', 'f', 'b', 'i', 'n', '\n'};
 static const char KF_TEXT [] {'#', 'k', 'f', 't', 'x', 't', '\n'};
 
+template<typename SizeType=std::size_t>
+inline SizeType str2kmer(const std::string &str) {
+    const unsigned k = str.size();
+    auto it(str.cbegin());
+    SizeType v = cstr_lut[*it++];
+    do {
+        v <<= 2;
+        if((v |= cstr_lut[*it++]) == SizeType(-1))
+            throw std::runtime_error("Illegal character!");
+    } while(it < str.cend());
+    return v;
+}
 
 // Counts short kmer occurrences using arrays. (Supported: up to 16)
 template<typename SizeType, typename=typename std::enable_if<std::is_integral<SizeType>::value && std::is_unsigned<SizeType>::value>::type>
@@ -46,7 +59,8 @@ class KFreqArray {
         u32            v_; // Value
         uint8_t        f_; // How full?
         std::vector<SizeType> data_;
-        SubKFreq(unsigned k): k_(k), v_(0), f_(0), data_(1ull << (k << 1)) {}
+        SubKFreq(unsigned k): k_(k), v_(0), f_(0), data_(1ull << (k << 1)) {
+        }
         void clear_kmer() {
             f_ = v_ = 0;
         }
@@ -69,6 +83,9 @@ class KFreqArray {
     std::vector<SubKFreq> freqs_;
 public:
     KFreqArray(unsigned k): maxk_(k) {
+        if(std::numeric_limits<SizeType>::max() > (1ull << (k << 1))) {
+            throw std::runtime_error(std::string("SizeType with width ") + std::to_string(sizeof(SizeType) * CHAR_BIT) + " is not long enough for k = " + std::to_string(maxk_));
+        }
         while(freqs_.size() < maxk_) {
             freqs_.emplace_back(freqs_.size() + 1);
         }
@@ -182,21 +199,13 @@ public:
         gzclose(fp);
     }
     SizeType count(const std::string &str) {
-        const unsigned k = str.size();
-        if(k > maxk_) throw std::runtime_error("String is longer than maxk.");
-        auto it(str.cbegin());
-        SizeType v = cstr_lut[*it++];
-        do {
-            v <<= 2;
-            if((v |= cstr_lut[*it++]) == SizeType(-1))
-                throw std::runtime_error("Illegal character!");
-        } while(it < str.cend());
-        return count(k, v);
+        return count(str.size(), str2kmer<SizeType>(str));
     }
     SizeType count(unsigned k, SizeType value) {
-        return freqs_[k - 1][value];
+        return freqs_[k - 1].data_[value];
     }
 };
+
 
 using KFC = KFreqArray<u32>;
 

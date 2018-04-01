@@ -65,6 +65,22 @@ all: $(OBJS) $(EX) $(DEX)
 %_d: bin/%.cpp $(DOBJS)
 	$(CXX) $(CXXFLAGS) $(DBG) $(INCLUDE) $(LD) $(DOBJS) $< -o $@ $(LIB)
 
+INCLUDES=-I`python3-config --includes` -Ipybind11/include -I.
+SUF=`python3-config --extension-suffix`
+OBJS=$(patsubst %.cpp,%$(SUF),$(wildcard *.cpp))
+ifeq ($(shell uname),Darwin)
+    UNDEFSTR=-undefined dynamic_lookup
+else
+    UNDEFSTR=
+endif
+
+python: py/kf.cpython.so
+	python -c "import subprocess;import site; subprocess.check_call('cp "py/*`python3-config --extension-suffix`" %s' % site.getsitepackages()[0], shell=True)"
+
+%.cpython.so: %.cpp
+	$(CXX) $(UNDEFSTR) $(INCLUDES) -O3 -Wall $(FLAGS) $(INC) -shared -std=c++17 -fPIC `python3 -m pybind11 --includes` $< -o $*$(SUF) && \
+    ln -fs $*$(SUF) $@
+
 tests: clean unit
 
 unit: $(DOBJS) $(TEST_OBJS)
