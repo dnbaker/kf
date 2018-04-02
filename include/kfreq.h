@@ -83,7 +83,7 @@ class KFreqArray {
     std::vector<SubKFreq> freqs_;
 public:
     KFreqArray(unsigned k): maxk_(k) {
-        if(std::numeric_limits<SizeType>::max() > (1ull << (k << 1))) {
+        if(std::numeric_limits<SizeType>::max() < (1ull << (k << 1))) {
             throw std::runtime_error(std::string("SizeType with width ") + std::to_string(sizeof(SizeType) * CHAR_BIT) + " is not long enough for k = " + std::to_string(maxk_));
         }
         while(freqs_.size() < maxk_) {

@@ -67,19 +67,29 @@ all: $(OBJS) $(EX) $(DEX)
 
 INCLUDES=-I`python3-config --includes` -Ipybind11/include -I.
 SUF=`python3-config --extension-suffix`
+INCLUDES2=-I`python-config --includes` -Ipybind11/include -I.
+SUF2=`python-config --extension-suffix || echo ".so"`
+
 OBJS=$(patsubst %.cpp,%$(SUF),$(wildcard *.cpp))
 ifeq ($(shell uname),Darwin)
-    UNDEFSTR=-undefined dynamic_lookup
+	UNDEFSTR:=-undefined dynamic_lookup
 else
-    UNDEFSTR=
+	UNDEFSTR:=
 endif
 
 python: py/kf.cpython.so
 	python -c "import subprocess;import site; subprocess.check_call('cp "py/*`python3-config --extension-suffix`" %s' % site.getsitepackages()[0], shell=True)"
 
+python2: py/kf.cpython2.so
+	python -c "import subprocess;import site; subprocess.check_call('cp "py/*`python-config --extension-suffix || echo '.so'`" %s' % site.getsitepackages()[0], shell=True)"
+
 %.cpython.so: %.cpp
 	$(CXX) $(UNDEFSTR) $(INCLUDES) -O3 -Wall $(FLAGS) $(INC) -shared -std=c++11 -fPIC `python3 -m pybind11 --includes` $< -o $*$(SUF) && \
-    ln -fs $*$(SUF) $@
+	ln -fs $*$(SUF) $@
+
+%.cpython2.so: %.cpp
+	$(CXX) $(UNDEFSTR) $(INCLUDES2) -O3 -Wall $(FLAGS) $(INC) -shared -std=c++11 -fPIC `python -m pybind11 --includes` $< -o $*$(SUF2) && \
+	echo ln -sf $$(basename $*$(SUF2)) $@
 
 tests: clean unit
 
@@ -90,8 +100,5 @@ zunit: $(ZOBJS) $(ZTEST_OBJS)
 	$(CXX) $(CXXFLAGS) $(INCLUDE) $(ZTEST_OBJS) $(LD) $(ALL_ZOBJS) -o $@ $(LIB) $(ZCOMPILE_FLAGS)
 
 clean:
-	rm -f $(ZOBJS) $(ZTEST_OBJS) $(ZW_OBJS) $(OBJS) $(DEX) $(ZEX) $(EX) $(TEST_OBJS) $(DOBJS) unit lib/*o src/*o \
-	&& cd ../hll && make clean && cd ../bonsai
+	rm -f $(ZOBJS) $(ZTEST_OBJS) $(ZW_OBJS) $(OBJS) $(EX) $(TEST_OBJS) $(DOBJS)
 
-mostlyclean:
-	rm -f $(ZOBJS) $(ZTEST_OBJS) $(ZW_OBJS) $(OBJS) $(DEX) $(ZEX) $(EX) $(TEST_OBJS) $(DOBJS) unit lib/*o src/*o
