@@ -15,6 +15,9 @@ void usage(char **argv) {
                          "-k\tSet kmer size [4]\n"
                          "-b\tEmit binary [false]\n"
                          "-p\tSet number of threads [1]. Using -1 will result in all available cores being used\n"
+                         "-o\tSet output file for distance table, if produced.\n"
+                         "-c\tCalculate distances.\n"
+                         "-R\tDo not reverse complement. [Default: always reverse complement.]\n"
                  , *argv);
     std::fflush(stderr);
     std::exit(EXIT_FAILURE);

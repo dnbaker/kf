@@ -104,13 +104,7 @@ struct SubKFreq {
 #endif
     }
     void rc_collapse() {
-        u32 k, rc;
-        for(k = 0; k < k_; ++k) {
-            if((rc = reverse_complement(k, k_)) < k)
-                data_[rc] += data_[k], data_[k] = 0;
-            else
-                data_[k] += data_[rc], data_[rc] = 0;
-        }
+        for(u32 rc, k = 0; k < k_; rc = reverse_complement(k, k_), data_[rc] += data_[k], data_[k++] = data_[rc]);
     }
 };
 
