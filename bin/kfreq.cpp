@@ -110,8 +110,9 @@ int main(int argc, char *argv[]) {
             auto &kfc = kfcs[tid];
             kfc.add(paths[i].data(), kseqs.data() + tid);
             if(rc) rc_collapse(kfc);
-            emit_zscores(pathnames[i], calc_zscores(kfc));
-            if(calculate_distances) profiles[i] = std::move(calc_zscores(kfc));
+            auto zs = calc_zscores(kfc);
+            emit_zscores(pathnames[i], zs);
+            if(calculate_distances) profiles[i] = zs;
             kfc.clear();
         }
         for(auto &ks: kseqs) kseq_destroy_stack(ks);
