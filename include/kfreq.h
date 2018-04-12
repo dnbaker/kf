@@ -106,11 +106,10 @@ struct SubKFreq {
     void rc_collapse() {
         u32 k, rc;
         for(k = 0; k < k_; ++k) {
-            if((rc = reverse_complement(k, k_)) < k) {
+            if((rc = reverse_complement(k, k_)) < k)
                 data_[rc] += data_[k], data_[k] = 0;
-            } else {
+            else
                 data_[k] += data_[rc], data_[rc] = 0;
-            }
         }
     }
 };
@@ -132,7 +131,7 @@ public:
     const FreqType &freqs() const {return freqs_;}
     using size_type = SizeType;
     KFreqArray(unsigned k): maxk_(k) {
-        if(std::numeric_limits<SizeType>::max() > (1ull << (k << 1)))
+        if(std::numeric_limits<SizeType>::max() < (1ull << (k << 1)))
             throw std::runtime_error(std::string("SizeType with width ") + std::to_string(sizeof(SizeType) * CHAR_BIT) + " is not long enough for k = " + std::to_string(maxk_));
         while(freqs_.size() < maxk_) freqs_.emplace_back(freqs_.size() + 1);
         //if(maxk_ != 4) throw std::runtime_error("I'm making it for only k == 4 for now because I'm lazy.");
