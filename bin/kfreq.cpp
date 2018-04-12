@@ -3,6 +3,10 @@
 #include <omp.h>
 #include "kfreq.h"
 
+#ifndef FLOAT_TYPE
+#define FLOAT_TYPE double
+#endif
+
 using namespace kf;
 
 void usage(char **argv) {
@@ -21,21 +25,54 @@ std::string canonicalize(const char *str) {
     return str;
 }
 
+std::vector<std::vector<FLOAT_TYPE>> pairwise_pearson(const std::vector<std::vector<FLOAT_TYPE>> &profiles) {
+    std::vector<std::vector<FLOAT_TYPE>> ret;
+    ret.reserve(profiles.size());
+    while(ret.size() < profiles.size()) ret.emplace_back(profiles.size());
+    for(size_t i(0); i < profiles.size(); ++i)
+        for(size_t j(i + 1); j < profiles.size(); ++j)
+            ret[i][j] = ret[j][i] = freq::pearsonr_naive(profiles[i], profiles[j]);
+    return ret;
+}
+
+void print_distmat(std::FILE *ofp, const std::vector<std::vector<FLOAT_TYPE>> &profiles, const std::vector<std::string> &paths) {
+    std::fprintf(ofp, "#Path");
+    for(const auto &path: paths) std::fprintf(ofp, "\t%s", path.data());
+    std::fputc('\n', ofp);
+    for(size_t i(0); i < profiles.size(); ++i) {
+        std::fputs(paths[i].data(), ofp);
+        for(const auto &val: profiles[i]) std::fprintf(ofp, "\t%f", val);
+        std::fputc('\n', ofp);
+    }
+}
+
+void emit_zscores(const std::string &path, const std::vector<FLOAT_TYPE> &data) {
+    std::FILE *ofp = std::fopen(path.data(), "wb");
+    if(ofp == nullptr) throw std::runtime_error(std::string("Could not open file at ") + path);
+    for(const auto &val: data) std::fprintf(ofp, "%f\n", val);
+    std::fclose(ofp);
+}
+
 int main(int argc, char *argv[]) {
     if(argc == 1) usage(argv);
+
+    using KFType = freq::KFC;
     std::vector<std::string> paths;
-    bool emit_binary = false;
+    bool rc = true, calculate_distances = true;
     unsigned ks = 4;
     int c, nthreads = 1;
-    while((c = getopt(argc, argv, "bk:")) >= 0) {
+    std::FILE *ofp = stdout;
+    while((c = getopt(argc, argv, "Rcbo:k:h?")) >= 0) {
         switch(c) {
+            case 'o': ofp = std::fopen(optarg, "wb"); break;
             case 'k': ks = std::atoi(optarg); break;
-            case 'b': emit_binary = true; break;
             case 'p': nthreads = std::atoi(optarg); break;
+            case 'c': calculate_distances = false; break;
+            case 'R': rc = false; break;
+            case 'h': case '?': usage(argv);
         }
     }
-    if(nthreads < 0)
-        nthreads = std::thread::hardware_concurrency();
+    if(nthreads < 0) nthreads = std::thread::hardware_concurrency();
     if(ks > 16 || ks < 2) {
         std::fprintf(stderr, "ks: %u. Max supported: 16. Min: 2\n", ks);
         usage(argv);
@@ -43,28 +80,35 @@ int main(int argc, char *argv[]) {
     for(char **p(argv + optind); *p; paths.emplace_back(*p++));
     if(nthreads == 1) {
         kseq_t seq = kseq_init_stack();
-        freq::KFC kc(ks);
+        KFType kc(ks);
         for(const auto &path: paths) {
-            std::string outpath = canonicalize(path.data()) + ".k" + std::to_string(ks) + ".bin";
+            std::string outpath = canonicalize(path.data()) + ".k" + std::to_string(ks) + ".txt";
             kc.add(path.data(), &seq);
-            kc.write(outpath.data(), emit_binary);
+            if(rc) rc_collapse(kc);
+            emit_zscores(outpath, calc_zscores(kc));
             kc.clear();
         }
         kseq_destroy_stack(seq);
     } else {
-        std::vector<freq::KFC> kfcs; kfcs.reserve(nthreads);
+        std::vector<std::vector<FLOAT_TYPE>> profiles;
+        if(calculate_distances) profiles.resize(paths.size());
+        std::vector<KFType> kfcs; kfcs.reserve(nthreads);
         std::vector<kseq_t> kseqs; kseqs.reserve(nthreads);
         while(kseqs.size() < (unsigned)nthreads) kseqs.emplace_back(kseq_init_stack()), kfcs.emplace_back(ks);
         std::vector<std::string> pathnames;
-        for(const auto &path: paths) pathnames.emplace_back(canonicalize(path.data()) + ".k" + std::to_string(ks) + ".bin");
+        for(const auto &path: paths) pathnames.emplace_back(canonicalize(path.data()) + ".k" + std::to_string(ks) + ".txt");
         #pragma omp parallel for
         for(unsigned i = 0; i < paths.size(); ++i) {
             const auto tid =  omp_get_thread_num();
             auto &kfc = kfcs[tid];
             kfc.add(paths[i].data(), kseqs.data() + tid);
-            kfc.write(pathnames[i].data(), emit_binary);
+            if(rc) rc_collapse(kfc);
+            emit_zscores(pathnames[i], calc_zscores(kfc));
+            if(calculate_distances) profiles[i] = std::move(calc_zscores(kfc));
             kfc.clear();
         }
         for(auto &ks: kseqs) kseq_destroy_stack(ks);
+        if(calculate_distances) print_distmat(ofp, pairwise_pearson(profiles), paths);
     }
+    if(ofp != stdout) std::fclose(ofp);
 }
